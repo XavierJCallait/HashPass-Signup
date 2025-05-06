@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sign Up</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(to right, #3b82f6, #6366f1);
+      font-family: Arial, sans-serif;
+    }
+    .card {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 450px;
+    }
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: #3b82f6;
+      text-align: center;
+    }
+    .input-field {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .button {
+      width: 100%;
+      padding: 12px;
+      background-color: #3b82f6;
+      color: #fff;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #error {
+      color: #d32f2f;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #fff;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Sign Up</h2>
+    <div id="error"></div>
+    <form id="signupForm">
+      <input type="text" id="name"    name="name"    placeholder="Name"              class="input-field" required>
+      <input type="email" id="email"  name="email"   placeholder="Email"             class="input-field" required>
+      <input type="tel"   id="phone"  name="phone"   placeholder="Phone"             class="input-field" pattern="\d*" required>
+      <div id="securityQuestions"></div>
+      <input type="password" id="passphrase"       name="passphrase"        placeholder="Passphrase"        class="input-field" required>
+      <input type="password" id="confirmPassphrase"name="confirmPassphrase" placeholder="Confirm Passphrase" class="input-field" required>
+      <button type="submit" id="submitBtn" class="button">Sign Up</button>
+    </form>
+  </div>
+
+  <!-- CryptoJS for AES -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script>
+    // 1) Security questions list
+    const securityQuestions = [
+      "What is your favorite color?",
+      "What is your mother's maiden name?",
+      "What was the make and model of your first car?",
+      "What city were you born in?",
+      "What was the name of your elementary school?",
+      "What was the name of your childhood best friend?",
+      "What is the title of your favorite book?",
+      "What is the name of your favorite teacher?",
+      "What is your favorite food?",
+      "What is the name of the street you grew up on?"
+    ];
+
+    // 2) Render question inputs
+    document.addEventListener('DOMContentLoaded', () => {
+      const container = document.getElementById('securityQuestions');
+      securityQuestions.forEach((q, i) => {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = `security${i}`;
+        inp.placeholder = q;
+        inp.className = 'input-field';
+        inp.required = true;
+        container.appendChild(inp);
+      });
+    });
+
+    // 3) UUID v4 generator
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        .replace(/[xy]/g, c => {
+          const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+    }
+
+    // 4) AES encryption wrapper
+    async function encrypt(text, passphrase) {
+      return CryptoJS.AES.encrypt(text, passphrase).toString();
+    }
+
+    // 5) Passphrase strength check
+    const passphraseRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{12,}$/;
+    function validatePassphrase(pass) {
+      return passphraseRegex.test(pass);
+    }
+
+    // 6) Form submission
+    document.getElementById('signupForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errorDiv  = document.getElementById('error');
+      const submitBtn = document.getElementById('submitBtn');
+      errorDiv.textContent = '';
+
+      // gather values
+      const name     = document.getElementById('name').value.trim();
+      const email    = document.getElementById('email').value.trim();
+      const phone    = document.getElementById('phone').value.trim();
+      const pass     = document.getElementById('passphrase').value;
+      const confirm  = document.getElementById('confirmPassphrase').value;
+      const answers  = securityQuestions.map((_, i) => 
+                        document.getElementById(`security${i}`).value.trim()
+                      );
+
+      // 6a) match & strength
+      if (pass !== confirm) {
+        errorDiv.textContent = 'Passphrases do not match.';
+        return;
+      }
+      if (!validatePassphrase(pass)) {
+        errorDiv.textContent = 'Passphrase must be at least 12 characters, include an uppercase letter, a number, and a special character.';
+        return;
+      }
+
+      // 6b) show loading
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span>';
+
+      try {
+        // 6c) encrypt everything
+        const uuid      = generateUUID();
+        const encUuid   = await encrypt(uuid, pass);
+        const encName   = await encrypt(name, pass);
+        const encPhone  = await encrypt(phone, pass);
+        const encAns    = await Promise.all(answers.map(a => encrypt(a, pass)));
+
+        const payload = {
+          uuid,
+          enc_uuid:  encUuid,
+          enc_name:  encName,
+          email,
+          enc_phone: encPhone,
+          enc_answers: encAns
+        };
+
+        // 6d) send to your API
+        const res = await fetch('https://8fy84busdk.execute-api.us-east-1.amazonaws.com/API/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sign-up failed');
+
+        // 6e) on success, redirect
+        window.location.href = `/signup_success?uuid=${encodeURIComponent(uuid)}`;
+      } catch (err) {
+        errorDiv.textContent = err.message || 'An unexpected error occurred';
+      } finally {
+        // restore button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign Up';
+      }
+    });
+  </script>
+
+</body>
+</html>
